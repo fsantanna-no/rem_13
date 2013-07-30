@@ -82,7 +82,7 @@ mathescape=true,
     breaklines=false, % sets automatic line breaking
     %breakatwhitespace=false,
     numbersep=2em,
-    emph={par,or,do,end,loop,await,emit,input,event,call,with,command,%
+    emph={par,or,hor,do,end,loop,await,emit,input,event,call,with,command,%
           var,and,then,else,C,return,pure,deterministic,nohold,finalize,%
           each, abort, when},
     emphstyle={\bfseries},
@@ -189,9 +189,8 @@ features that programmers are familiarized, such as shared memory concurrency.
 is a Esterel-based reactive programming language that provides a reliable yet 
 powerful programming environment for embedded systems with some fundamental 
 distinctions.
-In this work we focus on the differences from \CEU to Esterel that introduce 
+In this work we focus on the differences from \CEU to Esterel which introduce 
 new programming functionalities:
-
 %
 \begin{itemize}
 \item The execution order for memory operations rely on a deterministic 
@@ -203,20 +202,9 @@ programming.
 % (like function calls in typical programming languages).
 \end{itemize}
 
-\begin{comment}
-We present a formal semantics for the control primitives of \CEU.
-
- and discuss an
-alternative to Esterel's abortion primitive that is required for dataflow 
-support.
-This modification makes lines of executions to rejoin in an equivalent way to 
-topological traversal in dependency graphs of dataflow 
-languages~\cite{rp.twelve,frp.survey}.
-%
-We also show that, based on the stacked execution for internal events, \CEU can 
-describe mutual data dependency without requiring an explicit \emph{delay} 
-operator to break cycles~\cite{frtime.embedding,luagravity.sblp}.
-\end{comment}
+We present a formal semantics for the control primitives of \CEU and discuss 
+how they avoid \emph{glitches} and \emph{cyclic dependencies} in dataflow 
+programming~\cite{frp.survey}.
 
 %Based on the semantics, we also discuss the safety guarantees provided by 
 %\CEU, such as deterministic behavior.
@@ -440,19 +428,32 @@ safely~\cite{esterel.preemption,sync_async.threadsstop}.
 
 The code fragments of Figure~\ref{lst.abortion} illustrate thread abortion in 
 Esterel and \CEU.
-Note that it is not clear in the example if the call to \code{f} should execute 
-or not, given that the body and abortion event are the same.
+%
+It is not clear in the example in Esterel if the call to \code{f} should 
+execute or not, given that the body and abortion event are the same.
+%
 For this reason, Esterel provides the \emph{weak} and \emph{strong} variations 
 for the \code{abort} statement.
 With \emph{strong} abortion (the default), the body is aborted immediately and 
 the call does not execute.
+%
 In \CEU, given the deterministic scheduling rules, strong and weak abortions 
 can be chosen by reordering the trails within a \code{par/or}, e.g., in the 
-example \code{\_f} always executes because its body awakes before the aborting 
-trail.
+example the first trail strongly aborts the second and the call to \code{\_f} 
+never executes.
+
+The \code{par/hor} (standing for \emph{hierarchical-or}) provides an 
+alternative that schedules both sides before aborting the composition.
+In the rightmost example of Figure~\ref{lst.abortion}, both \code{\_g} and 
+\code{\_f} (in this order) will execute in reaction to \code{S}.
+Hierarchical traversal is fundamental for dataflow programming, as we discuss 
+in Section~\ref{sec.adv.frp}.
+Note that in contrast with a \code{par/and}, a \code{par/hor} rejoins on the 
+same reaction one of its trails terminates, but it gives the opportunity for 
+the other side to also react.
 
 \begin{figure}[h]
-\begin{minipage}[t]{0.45\linewidth}
+\begin{minipage}[t]{0.32\linewidth}
 \begin{lstlisting}
 // ESTEREL
 abort
@@ -462,14 +463,27 @@ when S;
 \end{lstlisting}
 \end{minipage}
 %
-\begin{minipage}[t]{0.45\linewidth}
+\begin{minipage}[t]{0.32\linewidth}
 \begin{lstlisting}
-// CEU
+// CEU (or)
 par/or do
     await S;
-    _f();
 with
     await S;
+    _f();
+end
+\end{lstlisting}
+\end{minipage}
+%
+\begin{minipage}[t]{0.32\linewidth}
+\begin{lstlisting}
+// CEU (hor)
+par/hor do
+    await S;
+    _g();
+with
+    await S;
+    _f();
 end
 \end{lstlisting}
 \end{minipage}
@@ -870,6 +884,24 @@ higher level to developers.
 \subsection{Dataflow programming}
 \label{sec.adv.frp}
 
+\begin{comment}
+
+terminate), which is fundamental to enable multiple dependencies from the -same 
+source in dataflow programming (to be discussed in
+-Sections~\ref{sec.sem}~and~\ref{sec.adv.frp}).
+
+alternative to Esterel's abortion primitive that is required for dataflow 
+support.
+This modification makes lines of executions to rejoin in an equivalent way to 
+topological traversal in dependency graphs of dataflow 
+languages~\cite{rp.twelve,frp.survey}.
+%
+We also show that, based on the stacked execution for internal events, \CEU can 
+describe mutual data dependency without requiring an explicit \emph{delay} 
+operator to break cycles~\cite{frtime.embedding,luagravity.sblp}.
+\end{comment}
+
+
 Reactive dataflow programming provides a declarative style to express 
 dependency relationships among data~\cite{frp.survey}.
 %
@@ -1076,6 +1108,7 @@ p ; q                    (sequence)
 loop p                   (repetition)
 p and q                  (par/and)
 p or q                   (par/or)
+p hor q                  (par/hor)
 
 // derived by semantic rules
 awaiting(e,m)            (awaiting `e' since seqno `m')
@@ -1124,7 +1157,7 @@ A complete reaction chain in \CEU is formalized as follows:
 $$
 \LL S, s, p \RR
     \xrightarrow[~~n~~]{~~*~~}
-pop~\LL S', s', p' \RR
+pop(p,~\LL S', s', p' \RR)
 $$
 %
 \emph{At a given external sequence $n$, a program $p$ with a stack of events 
@@ -1145,8 +1178,10 @@ it is initialized to the external event, but $emit$ statements can push new
 events on top of it.
 When no transitions are possible in the current level, the stack is popped and 
 the previous event is reactivated.
-The reaction chain terminates when the level 1 is popped from the stack, 
-signaling that the original external event has been completely handled.
+The reaction chain terminates when the level 0 is popped from the stack, 
+signaling that the original external event has been completely handled and no 
+trails are pending.
+% TODO: 1=>0(ext), 0=>-1(hor)
 
 To describe the full execution of a program with reaction chains in sequence, 
 we need multiple ``invocations'' of the operational semantics, i.e.:
@@ -1154,11 +1189,11 @@ we need multiple ``invocations'' of the operational semantics, i.e.:
 \begin{align*}
 \LL \{ 1 \mapsto e1 \}, 1, p \RR
     & \xRightarrow[~~1~~]{}
-\LL \{\}, 0, p' \RR
+\LL \{\}, -1, p' \RR
 \\
 \LL \{ 1 \mapsto e2 \}, 1, p' \RR
     & \xRightarrow[~~2~~]{}
-\LL \{\}, 0, p'' \RR
+\LL \{\}, -1, p'' \RR
 \\
 & ...
 \end{align*}
@@ -1295,7 +1330,20 @@ This way, there is a single order of execution for side effects (represented by
     {\DS isBlocked(p) }
 %   -----------------------------------------------------------
     {\DS \LL S,s, (p~or~nop) \RR \ST \LL S,s, nop \RR }
-    & \rr{(or-nop2)}
+    & \rr{(or-nop2)}    \\
+%
+%%%
+& \frac
+    {\DS q \neq (a~hor~b) \1\vee\1 (a \neq nop \1\wedge\1 b \neq nop) }
+%   -----------------------------------------------------------
+    {\DS \LL S,0, (nop~hor~q) \RR \ST \LL S,1, nop \RR }
+    & \rr{(hor-nop1)}   \\
+%%%
+& \frac
+    {\DS p \neq (a~hor~b) \1\vee\1 (a \neq nop \1\wedge\1 b \neq nop) }
+%   -----------------------------------------------------------
+    {\DS \LL S,0, (p~hor~nop) \RR \ST \LL S,1, nop \RR }
+    & \rr{(hor-nop2)}
 %
 \end{eqnarray*}
 }
@@ -1330,37 +1378,16 @@ With the new stack level $s+1$, the $emitting(s)$ cannot transit, as rule
 This trick enforces the desired stack-based semantics for internal events.
 
 The function $pop$ (called after every transition) removes the top of the stack 
-when the program becomes blocked, allowing that previously stacked $emitting$ 
-operations progress:
+when the rules cannot make a transition, allowing that previously stacked 
+$emitting$ operations progress:
 %
 \[
-pop~\LL S, s, p \RR~ =
+pop(p,~\LL S, s, p' \RR)~=
 \begin{cases}
-    \LL S, s-1, p \RR, &        isBlocked(p) \1\wedge\1 s>0     \\
-    \LL S, s,   p \RR, & \neg ( isBlocked(p) \1\wedge\1 s>0 )
+    \LL S, s-1, p' \RR, & p = p' \\
+    \LL S, s,   p' \RR, & p \neq p'
 \end{cases}
 \]
-%
-The recursive predicate $isBlocked$ is true only if all branches in parallel 
-are hanged in $awaiting$ or $emitting$ operations that cannot transit:
-%
-{\small
-\begin{align*}
-  isBlocked(n,S,s, awaiting(e,m)) &= (e \neq S(s) \1\vee\1 m = n)   \\
-  isBlocked(n,S,s, emitting(t))   &= (t \neq s)                     \\
-  isBlocked(n,S,s, (p~;~q))       &= isBlocked(n,S,s,p)             \\
-  isBlocked(n,S,s, (p~@~loop~q))  &= isBlocked(n,S,s,p)             \\
-  isBlocked(n,S,s, (p~and~q))     &= isBlocked(n,S,s,p)~\wedge \\
-                                     &~~~~isBlocked(n,S,s,q)             \\
-  isBlocked(n,S,s, (p~or~q))      &= isBlocked(n,S,s,p)~\wedge \\
-                                     &~~~~isBlocked(n,S,s,q)             \\
-  isBlocked(n,S,s, *)             &= false \2  (nop,mem,await,      \\
-                                  &    \5\5\5\2 emit,break,if,loop)   %\\
-\end{align*}
-}%
-%\caption{ The recursive predicate $isBlocked$: only the \emph{awaiting} and 
-%\emph{stacked} primitives can block and avoid transitions.
-%\label{fig:isBlocked}
 %
 \begin{comment}
 The first two cases query the $awaiting$ and $emitting$ operations to check if 
@@ -1396,14 +1423,32 @@ and \rr{seq-brk} would conflict.
 Rule \rr{loop-brk} escapes the enclosing loop, transforming everything into a 
 $nop$.
 
-The rules with the \rr{par} prefix are valid for both $and$/$or$ compositions 
-(substituting the $par$ in the rules for each of them).
+The rules with the \rr{par} prefix are valid for all $and$/$or$/$hor$ 
+compositions (substituting the $par$ in the rules for each of them).
 The transitions on the left branch $p$ are forced to occur before transitions 
 on the right branch $q$ (rules \rr{par-adv1} and \rr{par-adv2}).
 %
 The deterministic behavior of the semantics relies on the \emph{isBlocked} 
-predicate used in rule \rr{par-adv2}, which requires the left branch $p$ to be 
-blocked in order to allow the right transition from $q$ to $q'$.
+recursive predicate, which is only true if all branches in parallel are hanged 
+in $awaiting$ or $emitting$ operations that cannot transit:
+%
+{\small
+\begin{align*}
+  isBlocked(n,S,s, awaiting(e,m)) &= (e \neq S(s) \1\vee\1 m = n)   \\
+  isBlocked(n,S,s, emitting(t))   &= (t \neq s)                     \\
+  isBlocked(n,S,s, (p~;~q))       &= isBlocked(n,S,s,p)             \\
+  isBlocked(n,S,s, (p~@~loop~q))  &= isBlocked(n,S,s,p)             \\
+  isBlocked(n,S,s, (p~par~q))     &= isBlocked(n,S,s,p)~\wedge \\
+                                     &~~~~isBlocked(n,S,s,q)             \\
+  isBlocked(n,S,s, *)             &= false~(all~others)
+\end{align*}
+}%
+%\caption{ The recursive predicate $isBlocked$: only the \emph{awaiting} and 
+%\emph{stacked} primitives can block and avoid transitions.
+%\label{fig:isBlocked}
+%
+For instance, rule \rr{par-adv2} requires the left branch $p$ to be blocked in 
+order to allow the right transition from $q$ to $q'$.
 %
 The rules \rr{par-brk1} and \rr{par-brk2} deal with a $break$ in each of the 
 parallel sides, which terminates the whole composition to escape the innermost 
@@ -1413,12 +1458,25 @@ The difference among the three parallel compositions consists in how to deal
 with one of the sides terminating with a $nop$.
 %
 For an $and$ composition, if one of the sides terminate, the composition is 
-simply substituted by the other side (rules \rr{and-nop1} and \rr{and-nop2}).
+simply substituted by the other side (rules \rr{and-nop1} and \rr{and-nop2}), 
+as both sides are required to terminate.
 %
-For a parallel $or$, reaching a $nop$ in either of the sides should terminate 
-the composition (rules \rr{or-nop1} and \rr{or-nop2}).
+For a parallel $or$, reaching a $nop$ in either of the sides should 
+immediatelly terminate the composition (rules \rr{or-nop1} and \rr{or-nop2}).
 %Note that rule \rr{xor-nop1} strongly aborts trail $q$ as soon as $p$ reaches 
 %a $nop$
+%
+However, for a parallel $hor$ it is not enough that one of the sides reaches a 
+$nop$, as the other should also be allowed to react.
+The rules \rr{hor-nop1} and \rr{hor-nop2} ensure, first, that a composition 
+rejoins only after no transitions are possible in either sides, and second, 
+that rejoins happen from inside out, i.e., that nested compositions rejoin 
+before outer compositions.
+The first condition is achieved by allowing transitions with $s=0$ only, when 
+the program is guaranteed to be blocked.
+For the second condition, we check if a nested $hor$ is also pending, forcing 
+that composition to transit first (via rules \textbf{par-adv1} or 
+\textbf{par-adv2}).
 
 %\newpage
 \section{Related work}
