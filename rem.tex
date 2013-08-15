@@ -17,6 +17,7 @@
 \renewcommand{\ttdefault}{txtt}
 
 \usepackage{amsmath}
+\usepackage{dsfont}
 \usepackage{mathtools}
 \everymath{\displaystyle}
 \usepackage{xspace}
@@ -114,8 +115,8 @@ mathescape=true,
 \CEU is a Esterel-based reactive language that targets constrained embedded 
 platforms.
 %
-Relying on a deterministic semantics, \CEU provides safe shared memory among 
-concurrent lines of execution.
+Relying on a deterministic semantics, it provides safe shared memory accesses 
+among concurrent lines of execution.
 %
 \CEU introduces a stack-based execution policy for internal events which 
 enables advanced control mechanisms considering the context of embedded 
@@ -169,17 +170,16 @@ in the \emph{dataflow}--\emph{declarative} style (e.g. Lustre
 change to a value is propagated through its dependencies without explicit 
 programming.
 
-We believe that programming for embedded systems can benefit from a new 
-language that reconciles both reactive synchronous styles, while preserving 
-typical $C$ features that programmers are familiarized, such as shared memory 
-concurrency.
+We believe that embedded-system programming can benefit from a new language 
+that reconciles both reactive synchronous styles, while preserving typical $C$ 
+features that programmers are familiarized, such as shared memory concurrency.
 %
 \CEU~\cite{ceu.sensys}
 % \footnote{C\'eu is the Portuguese word for \emph{sky}.}
 is a Esterel-based programming language targeting embedded systems aiming to 
 address this motivation.
-In this work, we focus on the differences between \CEU and Esterel that enable 
-new programming functionalities:
+In this work, we focus on the fundamental differences between \CEU and Esterel 
+that enable new programming functionalities:
 %
 \begin{itemize}
 \item A deterministic execution semantics for memory operations allows programs 
@@ -247,11 +247,11 @@ The first phrase of the specification is almost identical in the two
 implementations, with a small syntactic mismatch between the `$\|$' and 
 \code{par/and} constructs.
 %
-The reset behavior of Esterel uses a \code{abort-when}, which serves the same 
-purpose of \CEU's \code{par/or} (to be discussed in 
+The reset behavior (second phrase) of Esterel uses a \code{abort-when}, which 
+serves the same purpose of \CEU's \code{par/or} (to be discussed in 
 Section~\ref{sec.ceu.abortion}).
 In both cases, the occurrence of event \code{R} aborts the awaiting statements 
-and restarts the \code{loop}.
+in parallel and restarts the \code{loop}.
 
 \begin{figure}[t]
 \begin{minipage}[t]{0.49\linewidth}
@@ -1039,25 +1039,22 @@ language, with a reduced syntax as follows:
 %\rule{8.5cm}{0.37pt}
 {\small
 \begin{verbatim}
-// primary statements    // description
-nop(v)                   (constant value)
-mem                      (any memory access)
-await(e)                 (await event `e')
-emit(e)                  (emit event `e')
-break                    (loop escape)
-
-// compound statements
-mem ? p : q              (conditional)
-p ; q                    (sequence)
-loop p                   (repetition)
-p and q                  (par/and)
-p or q                   (par/or)
-p hor q                  (par/hor)
-
-// derived by semantic rules
-awaiting(e,m)            (awaiting `e' since seqno `m')
-emitting(t)              (emitting at stack level `t')
-p @ loop p               (unwinded loop)
+                          // primary expressions
+  p ::= mem(id)           (any memory access to `id')
+      | await(id)         (await event `id')
+      | emit(id)          (emit event `id')
+      | break             (loop escape)
+                          // compound expressions
+      | mem(id) ? p : p   (conditional)
+      | p ; p             (sequence)
+      | loop p            (repetition)
+      | p and p           (par/and)
+      | p or p            (par/or)
+      | p hor q           (par/hor)
+                          // derived by semantic rules
+      | awaiting(id,n)    (awaiting `id' since seqno `n')
+      | emitting(n)       (emitting on stack level `n')
+      | p @ loop p        (unwinded loop)
 \end{verbatim}
 }%
 %\caption{
@@ -1066,107 +1063,78 @@ p @ loop p               (unwinded loop)
 %}
 %\end{figure}
 %
-A $nop$ represents a terminated computation associated with a constant value.
-A $mem$ represents all memory accesses, assignments, and $C$ function calls.
+The $mem(id)$ primitive represents all accesses, assignments, and $C$ function 
+calls that affect a memory location identified by $id$.
+As the challenging parts of \CEU reside on its control structures, we are not 
+concerned here with a precise semantics for side effects, but only with their 
+occurrences in programs.
+%In accordance with the zero-delay hypothesis of \CEU, $mem$ expressions are 
+%considered to be atomic and instantaneous
 %
-%As the challenging parts of \CEU reside on its control structures, we are not 
-%concerned here with a precise semantics for side effects, but only with their 
-%occurrences in programs.
+The special notation $nop$ is used to represent an innocuous $mem$ expression 
+(it can be though as a synonym for $mem(\epsilon)$, where $\epsilon$ is an 
+unused identifier).
 %
-The semantic rules generate three statements that the programmer cannot write:
-the $awaiting$ avoids that an $await$ awakes during the same reaction it is 
-reached;
-the $emitting$ represents the continuation of an $emit$ and enables the desired 
-stacked behavior for internal events;
-a $loop$ is expanded with the special \code{`@'} separator (instead of 
-\code{`;'}) to properly bind $break$ statements inside $p$ to the enclosing 
-loop.
+All other expressions map to their counterparts in the concrete language in 
+TTT.
+%
+Note that $mem$ expressions cannot share identifiers with $await$/$emit$ 
+expressions.
 
-%\subsection{Operational semantics}
-
-We use a \emph{small-step} structural operational semantics to formally 
-describe a \emph{reaction chain} in \CEU, i.e., how a program behaves in 
-reaction to a single external event.
-%
-The semantics uses an explicit stack to properly nest the emission of internal 
-events.
-%
-A complete reaction chain in \CEU is formalized as follows:
+The core of our semantics is a relation that, given a sequence number $n$ 
+identifying the current reaction chain, maps a program $p$ and a stack of 
+events $S$ in a single step to a modified program and stack:
 %
 $$
-\LL S, s, p \RR
-    \xrightarrow[~~n~~]{~~*~~}
-pop(p,~\LL S', s', p' \RR)
+\LL S, p \RR
+    \xrightarrow[~~n~~]{}
+\LL S', p' \RR
 $$
 %
-\emph{At a given external sequence $n$, a program $p$ with a stack of events 
-$S$ with top $s$ continuously progress until no transitions are possible.
-After each transition, the top of the stack is popped if the program cannot 
-advance.}
-
-At the beginning of each reaction, the external sequence number $n$ is 
-incremented and the stack is initialized with the new external event, i.e., 
-$s=1$ and $S=\{ 1 \mapsto ext \}$.
-%
-The top of the stack represents the single event being handled at that level:
-it is initialized to the external event, but $emit$ statements can push new 
-events on top of it.
-When no transitions are possible in the current level, the stack is popped and 
-the previous event is reactivated.
-The reaction chain terminates when the level 0 is popped from the stack, 
-signaling that the original external event has been completely handled and no 
-trails are pending.
-% TODO: 1=>0(ext), 0=>-1(hor)
-
-To describe the full execution of a program with reaction chains in sequence, 
-we need multiple ``invocations'' of the operational semantics, i.e.:
+where
 %
 \begin{align*}
-\LL \{ 1 \mapsto e1 \}, 1, p \RR
-    & \xRightarrow[~~1~~]{}
-\LL \{\}, -1, p' \RR
-\\
-\LL \{ 1 \mapsto e2 \}, 1, p' \RR
-    & \xRightarrow[~~2~~]{}
-\LL \{\}, -1, p'' \RR
-\\
-& ...
+S, S' &\in id^*
+    &&(sequence~of~event~identifiers: [id_{top}, ..., id_1]) \\
+p, p' &\in P
+    && (as~described~in~the~syntax~above) \\
+n     &\in \mathds{N}
+    && (univocally~identifies~a~reaction~chain)
 \end{align*}
-%
-Each invocation starts with the external event at the top of the stack and 
-finishes with a modified program and an empty stack.
-After each invocation, the sequence number is incremented.
 
+At the beginning of a reaction chain, the stack is initialized with the special 
+$\eta$ event and the occurring external event $ext$ ($S=[\eta,ext]$), but 
+$emit$ expressions can push new events on top of it (we discuss how they are 
+popped further).
+%
+The event $\eta$ is used as a special marker to check for pending \emph{hor} 
+expressions before terminating the reaction.
+
+We describe this relation with a set of \emph{small-step} structural semantics 
+rules, which are built in such a way that at most one transition is possible at 
+any time, resulting in deterministic reaction chains.
+%
 Figure~\ref{fig.sem} shows the transitions rules for the complete semantics of 
 \CEU.
-At any time, at most one transition is possible.
-This way, there is a single order of execution for side effects (represented by 
-\code{mem} operations), and reaction chains are always deterministic.
 
 \begin{figure}
 %
 { \setlength{\jot}{7pt}
 \begin{align*}
-\LL S,s, mem \RR &\ST
-\LL S,s, nop(v) \RR, v \in \mathbb{N}
-    & \rr{(mem)}        \\
-%&~~(v~is~a~constant)
-%%%
-\LL S,s, await(e) \RR &\ST
-\LL S,s, awaiting(e,n) \RR
+\LL S,\1await(id) \RR &\ST
+\LL S,\1awaiting(id,n) \RR
     & \rr{(await)}      \\
 %%%
-\LL S,s, awaiting(S(s),m) \RR &\ST
-\LL S,s, nop \RR, m<n
+\LL id:S,\1awaiting(id,m) \RR &\ST
+\LL id:S,\1nop \RR, \2m<n
     & \rr{(awaiting)}   \\
 %%%
-\LL S,s, emit(e) \RR &\ST
-\LL S \uplus \{(s+1) \mapsto e\}, \\
-&~~~~~~~~~~s+1, emitting(s) \RR
+\LL S,\1emit(id) \RR &\ST
+\LL id:S,\1emitting(|S|) \RR
     & \rr{(emit)}       \\
 %%%
-\LL S,s, emitting(s) \RR &\ST
-\LL S,s, nop \RR
+\LL S,\1emitting(|S|) \RR &\ST
+\LL S,\1nop \RR
     & \rr{(emitting)}
 \end{align*}
 %}
@@ -1176,49 +1144,48 @@ This way, there is a single order of execution for side effects (represented by
 { %\normalsize
 \begin{eqnarray*}
 & \frac
-    {\DS m \ST m' }
-% -----------------------------------------------------------
-    {\DS \LL S,s, (m~?~p~:~q) \RR \ST
-         \LL S,s, (m'~?~p~:~q)\RR }
-    & \rr{(if-adv)}       \\
-%%%
-& \LL S,s, (nop(v)~?~p~:~q) \RR \ST
-  \LL S,s,  p \RR \1,\3 (v \neq 0)
+    { \DS val(id,n) \neq 0 }
+%   -----------------------------------------------------------
+    { \DS \LL S, (mem(id)~?~p~:~q) \RR \ST
+          \LL S, p \RR }
     & \rr{(if-true)}       \\
 %%%
-& \LL S,s, (nop(0)~?~p~:~q) \RR \ST
-  \LL S,s, q \RR
+& \frac
+    { \DS val(id,n) = 0 }
+%   -----------------------------------------------------------
+    { \DS \LL S, (mem(id)~?~p~:~q) \RR \ST
+          \LL S, q \RR }
     & \rr{(if-false)}       \\
 %%%
 & \frac
-    {\DS p \ST p' }
+    {\DS \LL S,p \RR \ST \LL S',p' \RR }
 %   -----------------------------------------------------------
-    {\DS \LL S,s, (p~;~q) \RR \ST \LL S,s, (p'~;~q) \RR }
-    & \rr{(seq-adv)}      \\
+    {\DS \LL S, (p~;~q) \RR \ST \LL S', (p'~;~q) \RR }
+    & \rr{(seq-adv)}        \\
 %%%
-& \LL S,s, (nop~;~q) \RR \ST  \LL S,s, q \RR
-    & \rr{(seq-nop)}      \\
+& \LL S, (mem(id)~;~q) \RR \ST  \LL S, q \RR
+    & \rr{(seq-nop)}        \\
 %%%
-& \LL S,s, (break~;~q) \RR \ST \LL S,s, break \RR
-    & \rr{(seq-brk)}      \\
+& \LL S, (break~;~q) \RR \ST \LL S, break \RR
+    & \rr{(seq-brk)}        \\
 %\end{eqnarray*}
 %}
 %
 %{ \setlength{\jot}{7pt}
 %\begin{eqnarray*}
-& \LL S,s, (loop~p) \RR \ST \LL S,s, (p~@~loop~p) \RR
+& \LL S, (loop~p) \RR \ST \LL S, (p~@~loop~p) \RR
     & \rr{(loop-expd)}       \\
 %%%
 & \frac
-    {\DS p \ST p' }
+    {\DS \LL S,p \RR \ST \LL S',p' \RR }
 % -----------------------------------------------------------
-    {\DS \LL S,s, (p~@~loop~q) \RR \ST \LL S,s, (p'~@~loop~q) \RR }
+    {\DS \LL S, (p~@~loop~q) \RR \ST \LL S', (p'~@~loop~q) \RR }
     & \rr{(loop-adv)}    \\
 %%%
-& \LL S,s, (nop~@~loop~p) \RR \ST \LL S,s, loop~p \RR
+& \LL S, (mem(id)~@~loop~p) \RR \ST \LL S, loop~p \RR
     & \rr{(loop-nop)}    \\
 %%%
-& \LL S,s, (break~@~loop~p) \RR \ST \LL S,s, nop \RR
+& \LL S, (break~@~loop~p) \RR \ST \LL S, nop \RR
     & \rr{(loop-brk)}       \\
 %\end{eqnarray*}
 %}
@@ -1226,31 +1193,31 @@ This way, there is a single order of execution for side effects (represented by
 %{ \setlength{\jot}{7pt}
 %\begin{eqnarray*}
 & \frac
-    {\DS p \ST p' }
+    {\DS \LL S,p \RR \ST \LL S',p' \RR }
 %   -----------------------------------------------------------
-    {\DS \LL S,s, (p~par~q) \RR \ST \LL S,s, (p'~par~q) \RR }
+    {\DS \LL S, (p~par~q) \RR \ST \LL S', (p'~par~q) \RR }
     & \rr{(par-adv1)}      \\
 %%%
 & \frac
-    {\DS isBlocked(p) \1\wedge\1 q \ST q' }
+    {\DS isBlocked(n,S,p) \1,\2 \LL S,q \RR \ST \LL S',q' \RR }
 %   -----------------------------------------------------------
-    {\DS \LL S,s, (p~par~q) \RR \ST \LL S,s, (p~par~q') \RR }
+    {\DS \LL S, (p~par~q) \RR \ST \LL S', (p~par~q') \RR }
     & \rr{(par-adv2)}      \\
 %%%
-& \LL S,s, (break~par~q) \RR \ST \LL S,s, break \RR
-    & \rr{(par-brk1)}   \\
-%%%
-& \frac
-    {\DS isBlocked(p) }
-%   -----------------------------------------------------------
-    {\DS \LL S,s, (p~par~break) \RR \ST \LL S,s, break \RR }
-    & \rr{(par-brk2)}       \\
-%%%
-& \LL S,s, (nop~and~q) \RR \ST \LL S,s, q \RR
+& \LL S, (mem(id)~and~q) \RR \ST \LL S, q \RR
     & \rr{(and-nop1)}   \\
 %%%
-& \LL S,s, (p~and~nop) \RR \ST \LL S,s, p \RR
+& \LL S, (p~and~mem(id)) \RR \ST \LL S, p \RR
     & \rr{(and-nop2)}   \\
+%%%
+& \LL S, (break~and~q) \RR \ST \LL S, (clear(q)~;~break) \RR
+    & \rr{(and-brk1)}   \\
+%%%
+& \frac
+    {\DS isBlocked(n,S,p) }
+%   -----------------------------------------------------------
+    {\DS \LL S, (p~and~break) \RR \ST \LL S, (clear(p)~;~break) \RR }
+    & \rr{(and-brk2)}   \\
 %\end{eqnarray*}
 %}
 %
@@ -1258,26 +1225,46 @@ This way, there is a single order of execution for side effects (represented by
 %\begin{eqnarray*}
 %
 %%%
-& \LL S,s, (nop~or~q) \RR \ST \LL S,s, nop \RR
+& \frac
+    {\DS \LL S,p \RR \ST \LL S',p' \RR }
+%   -----------------------------------------------------------
+    {\DS \LL S, (p~or~q) \RR \ST \LL S', (p'~or~q) \RR }
+    & \rr{(or-adv1)}   \\
+%%%
+& \frac
+    {\DS isBlocked(n,S,p) \1,\2 \LL S,q \RR \ST \LL S',q' \RR }
+%   -----------------------------------------------------------
+    {\DS \LL S (p~or~q) \RR \ST \LL S', (p~or~q') \RR }
+    & \rr{(or-adv2)}   \\
+%%%
+& \LL S, (mem(id)~or~q) \RR \ST \LL S, clear(q) \RR
     & \rr{(or-nop1)}   \\
 %%%
 & \frac
-    {\DS isBlocked(p) }
+    {\DS isBlocked(n,S,p) }
 %   -----------------------------------------------------------
-    {\DS \LL S,s, (p~or~nop) \RR \ST \LL S,s, nop \RR }
-    & \rr{(or-nop2)}    \\
-%
+    {\DS \LL S, (p~or~mem(id)) \RR \ST \LL S, clear(p) \RR }
+    & \rr{(or-nop2)}   \\
+%%%
+& \LL S, (break~or~q) \ST \LL S, (clear(q)~;~break) \RR
+    & \rr{(or-brk1)}   \\
+%%%
+& \frac
+    {\DS isBlocked(n,S,p) }
+%   -----------------------------------------------------------
+    {\DS \LL S, (p~or~break) \RR \ST \LL S, (clear(p)~;~break) \RR }
+    & \rr{(or-brk2)}   \\
 %%%
 & \frac
     {\DS q \neq (a~hor~b) \1\vee\1 (a \neq nop \1\wedge\1 b \neq nop) }
 %   -----------------------------------------------------------
-    {\DS \LL S,0, (nop~hor~q) \RR \ST \LL S,1, nop \RR }
+    {\DS \LL [\eta], (nop~hor~q) \RR \ST \LL [\eta], nop \RR }
     & \rr{(hor-nop1)}   \\
 %%%
 & \frac
     {\DS p \neq (a~hor~b) \1\vee\1 (a \neq nop \1\wedge\1 b \neq nop) }
 %   -----------------------------------------------------------
-    {\DS \LL S,0, (p~hor~nop) \RR \ST \LL S,1, nop \RR }
+    {\DS \LL [\eta], (p~hor~nop) \RR \ST \LL [\eta], nop \RR }
     & \rr{(hor-nop2)}
 %
 \end{eqnarray*}
@@ -1288,75 +1275,52 @@ This way, there is a single order of execution for side effects (represented by
 }
 \end{figure}
 
-A $mem$ reduces to a $nop$ in a single step (rule \rr{mem}), representing the 
-(bounded) execution of a side-effect operation.
-Although we opted not to formalize side effects, the actual values yielded by 
-$mem$ operations are required in conditionals (e.g., the value of a variable or 
-the result of a $C$ function call).
-%(In the rules that an yielded $nop$ cannot appear in a conditional, we omit 
-%its generated value, i.e., we use $nop$ instead of $nop(v)$.)
-
 An $await$ is simply transformed into an $awaiting$ that remembers the current 
-external sequence number $n$ (rule \rr{await}).
-An $awaiting$ can only transit to a $nop$ (rule \rr{awaiting}) if its referred 
-event matches the top of the stack ($S(s)$) and its sequence number is smaller 
-than the current one ($m<n$).
+external sequence number $n$ (rule \textbf{await}).
+An $awaiting$ can only transit to a $nop$ (rule \textbf{awaiting}) if its 
+referred event $id$ matches the top of the stack and its sequence number is 
+smaller than the current one ($m<n$).
 %
 %Remember that in \CEU, the \code{await} statement returns the value associated 
 %with the corresponding event: the yielded $mem$ represents the operation to 
 %query that value.
 %
-An $emit$ transits to an $emitting$ and pushes its referred event into the 
-stack (rule \rr{emit}).
-With the new stack level $s+1$, the $emitting(s)$ in rule \rr{emitting} cannot 
-transit, as it expects the parameter $s$ to match the current stack level.
-This trick enforces the desired stack-based behavior for internal events.
+An $emit$ transits to an $emitting$ holding the current stack level ($|S|$ 
+stands for the stack length), and pushing the referred event on the stack (in 
+rule \textbf{emit}).
+With the new stack level $|S|+1$, the $emitting(|S|)$ itself cannot transit, as 
+rule \textbf{emitting} expects its parameter to match the current stack level.
+This trick provides the desired stack-based semantics for internal events.
 
-The function $pop$ (called after each transition) removes the top of the stack 
-when the rules cannot make a transition, allowing that previously stacked 
-$emitting$ operations progress:
+Proceeding to compound expressions, the rules for conditionals and sequences 
+are straightforward.
 %
-\[
-pop(p,~\LL S, s, p' \RR)~=
-\begin{cases}
-    \LL S, s-1, p' \RR, & p = p' \\
-    \LL S, s,   p' \RR, & p \neq p'
-\end{cases}
-\]
+Given that our semantics focuses on control, rules \textbf{if-true} and 
+\textbf{if-false} are the only to query $mem$ expressions.
 %
-\begin{comment}
-The first two cases query the $awaiting$ and $emitting$ operations to check if 
-they are blocked.
-Note that the test predicates are reversed in comparison to the semantic rules 
-\rr{awaiting} and \rr{emitting} (i.e. they test when \emph{not} to advance).
-Note also that $nop$ is not considered a blocked operation.
-
-An emitted event remains at the top of the stack while there are matching 
-$awaiting$ operations---only after the $isBlocked$ predicate becomes true that 
-the $pop$ function takes effect.
-This behavior provides the desired broadcast communication for events.
-\end{comment}
-
-The rules for conditionals and sequences are straightforward (\rr{if-$*$} and 
-\rr{seq-$*$}).
+The ``magical'' function $val$ receives the memory identifier and current 
+reaction sequence number, returning the current memory value.
 %
-Given that the semantics focus on control, note that rules \rr{if-true} and 
-\rr{if-false} are the only to query $nop(v)$ values.
-%For all other rules, we omit these values (e.g., \rr{seq-nop}).
+Although the value is arbitrary, it is unique in a reaction chain, because a 
+given expression can execute only once within it (remember that $loops$ must 
+contain $awaits$ which, from rule \textbf{await}, cannot awake in the same 
+reaction they are reached).
+%For all other rules, we omit these values (e.g., \textbf{seq-nop}).
 
 The rules for loops are analogous to sequences, but use \code{`@'} as 
-separators to properly bind a break to its enclosing loop.
+separators to properly bind breaks to their enclosing loops.
 %
 When a program first encounters a $loop$, it first expands its body in sequence 
-with itself (rule \rr{loop-expd}).
-Rules \rr{loop-adv} and \rr{loop-nop} are similar to rules \rr{seq-adv} and 
-\rr{seq-nop}, advancing the loop until it reaches a $nop$.
-However, what follows the loop is the loop itself (rule \rr{loop-nop}).
-Note that if we used \code{`;'} as a separator in loops, rules \rr{loop-brk} 
-and \rr{seq-brk} would conflict.
+with itself (rule \textbf{loop-expd}).
+Rules \textbf{loop-adv} and \textbf{loop-nop} are similar to rules 
+\textbf{seq-adv} and \textbf{seq-nop}, advancing the loop until they reach a 
+$mem(id)$.
+However, what follows the loop is the loop itself (rule \textbf{loop-nop}).
+Note that if we used \code{`;'} as a separator in loops, rules 
+\textbf{loop-brk} and \textbf{seq-brk} would conflict.
 %
-Rule \rr{loop-brk} escapes the enclosing loop, transforming everything into a 
-$nop$.
+Rule \textbf{loop-brk} escapes the enclosing loop, transforming everything into 
+a $nop$.
 
 The rules with the \rr{par} prefix are valid for all $and$/$or$/$hor$ 
 compositions (substituting the $par$ in the rules for each of them).
@@ -1365,30 +1329,41 @@ The rules \rr{par-adv1} and \rr{par-adv2} force the transitions on the left
 branch $p$ to occur before transitions on the right branch $q$.
 %
 The deterministic behavior of the semantics relies on the \emph{isBlocked} 
-recursive predicate, which is only true if all branches in parallel are hanged 
-in $awaiting$ or $emitting$ operations that cannot transit:
+predicate, defined in Figure~\ref{fig.isBlocked} and used in rule 
+\textbf{and-adv2}, requiring the left branch $p$ to be blocked in order to 
+allow the right transition from $q$ to $q'$.
 %
+An expression becomes blocked when all of its trails in parallel hang in 
+$awaiting$ and $emitting$ expressions.
+
+\begin{figure}[t]
 {\small
 \begin{align*}
-  isBlocked(n,S,s, awaiting(e,m)) &= (e \neq S(s) \1\vee\1 m = n)   \\
-  isBlocked(n,S,s, emitting(t))   &= (t \neq s)                     \\
-  isBlocked(n,S,s, (p~;~q))       &= isBlocked(n,S,s,p)             \\
-  isBlocked(n,S,s, (p~@~loop~q))  &= isBlocked(n,S,s,p)             \\
-  isBlocked(n,S,s, (p~par~q))     &= isBlocked(n,S,s,p)~\wedge \\
-                                     &~~~~isBlocked(n,S,s,q)             \\
-  isBlocked(n,S,s, *)             &= false~(all~others)
+  isBlocked(n,a:S, awaiting(b,m)) &= (a \neq b \1\vee\1 m = n)   \\
+  isBlocked(n,S, emitting(s))    &= (|S| \neq s)                     \\
+  isBlocked(n,S, (p~;~q))        &= isBlocked(n,S,p)             \\
+  isBlocked(n,S, (p~@~loop~q))   &= isBlocked(n,S,p)             \\
+  isBlocked(n,S, (p~and~q))      &= isBlocked(n,S,p)~\wedge
+                               \\&~~~~isBlocked(n,S,q)             \\
+  isBlocked(n,S, (p~or~q))       &= isBlocked(n,S,p)~\wedge
+                               \\&~~~~isBlocked(n,S,q)             \\
+  isBlocked(n,S, \_)             &= false \2  (mem,await,      \\
+                                  &    \5\5\5\2 emit,break,if,loop)   %\\
 \end{align*}
 }%
-%\caption{ The recursive predicate $isBlocked$: only the \emph{awaiting} and 
-%\emph{stacked} primitives can block and avoid transitions.
-%\label{fig:isBlocked}
-%
-For instance, rule \rr{par-adv2} requires the left branch $p$ to be blocked in 
-order to allow the right transition from $q$ to $q'$.
-%
+%\rule{14cm}{0.37pt}
+\caption{
+The recursive predicate $isBlocked$.
+% is true only if all branches in parallel are hanged in $awaiting$ or 
+%$emitting$ expressions that cannot transit.
+\label{fig.isBlocked}
+}
+\end{figure}
+
 The rules \rr{par-brk1} and \rr{par-brk2} deal with a $break$ in each of the 
-parallel sides, terminating the whole composition to escape the innermost loop 
-(strongly aborting the other side).
+parallel sides.
+A $break$ should terminate the whole composition in order to escape the 
+innermost loop (\emph{aborting} the other side).
 
 The difference betwen the three parallel compositions consists in how to deal 
 with one of the sides terminating with a $nop$.
@@ -1411,7 +1386,61 @@ before outer compositions.
 The first condition is achieved by only allowing transitions with $s=0$, when 
 the program is guaranteed to be blocked.
 For the second condition, we check if a nested $hor$ is also pending, forcing 
-it to transit before (via rules \textbf{par-adv1} or \textbf{par-adv2}).
+it to transit before (via rules \rr{par-adv1} or \rr{par-adv2}).
+
+A reaction chain eventually blocks in $awaiting$ and $emitting$ expressions in 
+parallel trails.
+%
+If all trails hangs only in $awaiting$ expressions, it means that the program 
+cannot advance in the current reaction chain.
+%
+However, $emitting$ expressions should resume their continuations of previous 
+$emit$ in the ongoing reaction, they are just hanged in lower stack indexes 
+(see rule \textbf{emit}).
+%
+Therefore, we define another relation that behaves as the previous if the 
+program is not blocked, and, otherwise, pops the stack:
+%
+$$
+\frac
+    { \DS \LL S,p \RR \ST                   \LL S',p' \RR }
+%   -----------------------------------------------------------
+    {     \LL S,p \RR \xRightarrow[~~n~~]{} \LL S',p' \RR }
+%
+\5\5\5
+%
+\frac
+    { \DS isBlocked(n,\1s:S,\1p) }
+%   -----------------------------------------------------------
+    { \LL s:S,p \RR \xRightarrow[~~n~~]{} \LL S,p \RR }
+$$
+%
+To describe a \emph{reaction chain} in \CEU, i.e., how a program behaves in 
+reaction to a single external event, we use the reflexive transitive closure of 
+this relation:
+%
+$$
+    \LL S,p \RR \xRightarrow[~~n~~]{*} \LL S',p' \RR
+$$
+%
+Finally, to describe the complete execution of a program, we need multiple 
+``invocations'' of reaction chains, incrementing the sequence number:
+%
+\begin{align*}
+\LL [\eta,e1], p \RR
+    & \xRightarrow[~~1~~]{*}
+\LL [  ], p' \RR
+\\
+\LL [\eta,e2], p' \RR
+    & \xRightarrow[~~2~~]{*}
+\LL [  ], p'' \RR
+\\
+& ...
+\end{align*}
+%
+Each invocation starts with an external event at the top of the stack and 
+finishes with a modified program and an empty stack.
+After each invocation, the sequence number is incremented.
 
 %\newpage
 \section{Related work}
@@ -1450,9 +1479,6 @@ target constrained systems.
 such as a push-driven evaluation and glitch prevention.
 However, dataflow in \CEU is less abstract in comparison to FRP, and limited to 
 static relationships only.
-
-As far as we know, \CEU is the first language to reconcile the control and 
-dataflow reactive styles.
 
 \begin{comment}
 SHIM is an asynchronous language that enforces synchronous communications among 
@@ -1493,6 +1519,9 @@ without dedicated primitives.
 Nonetheless, the language is still simple and all control details (e.g. 
 deterministic execution, stack-based internal events, trail abortion) can be 
 described with a compact formal semantics.
+
+As far as we know, \CEU is the first language to reconcile the control and 
+dataflow reactive styles.
 
 \begin{comment}
 We consider that providing safe shared-memory concurrency is a fundamental 
