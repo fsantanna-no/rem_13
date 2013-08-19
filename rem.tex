@@ -172,7 +172,8 @@ programming.
 
 We believe that embedded-system programming can benefit from a new language 
 that reconciles both reactive synchronous styles, while preserving typical $C$ 
-features that programmers are familiarized, such as shared memory concurrency.
+features that programmers are familiarized with, such as shared memory 
+concurrency.
 %
 \CEU~\cite{ceu.sensys}
 % \footnote{C\'eu is the Portuguese word for \emph{sky}.}
@@ -203,7 +204,7 @@ elegantly implemented.
 %Also, both languages preclude the dynamic creation of lines of execution, as 
 %they employ static analysis in order to provide safety warranties for 
 %programs.
-
+%
 Nonetheless, previous work focusing on Wireless Sensor 
 Networks~\cite{ceu.sensys} shows that the expressiveness of \CEU is sufficient 
 for implementing a wide range of applications (e.g. network protocols and a 
@@ -224,7 +225,7 @@ Section~\ref{sec.related} compares \CEU to existing synchronous languages
 targeting embedded systems.
 Section~\ref{sec.conclusion} concludes the paper and makes final remarks.
 
-\newpage
+\newpage %TTT
 \section{Overview of C\'eu and Esterel}
 \label{sec.ceu}
 
@@ -238,20 +239,21 @@ in other words, trails are always synchronized at the current (and single)
 event.
 
 Figure~\ref{lst.abro} shows the implementations in Esterel and \CEU 
-side-by-side for the following specification~\cite{esterel.primer}:
+side-by-side for the following control specification~\cite{esterel.primer}:
 %
 \emph{``Emit an output O as soon as two inputs A and B have occurred.
 Reset this behavior each time the input R occurs''.}
 %
 The first phrase of the specification is translated almost identically in the 
-two implementations (lines 3-8), with a small syntactic mismatch between the 
-`$\|$' and \code{par/and} constructs.
+two implementations (lines 4-9): await and terminate only when both events 
+occur (with a small syntactic mismatch between the `$\|$' and \code{par/and} 
+constructs).
 %
-For the second phrase with the reset behavior, the Esterel version uses a 
+For the second phrase, the reset behavior, the Esterel version uses a 
 \code{abort-when}, which serves the same purpose of \CEU's \code{par/or} (to be 
-discussed in Section~\ref{sec.ceu.abrt}).
-In both cases, the occurrence of event \code{R} aborts the awaiting statements 
-in parallel and restarts the \code{loop}.
+discussed in Section~\ref{sec.ceu.abrt}):
+the occurrence of event \code{R} aborts the awaiting statements in parallel and 
+restarts the \code{loop}.
 
 \begin{figure}[t]
 \begin{minipage}[t]{0.44\linewidth}
@@ -311,8 +313,8 @@ The \code{await} statements are the only that halt a running reaction and allow
 a program to advance in this notion of time.
 %
 To ensure that reactions run in bounded time and programs always progress, 
-loops are required to contain at least one \code{await} statement in all 
-possible paths~\cite{ceu.sensys,esterel.primer}.
+loops are statically required to contain at least one \code{await} statement in 
+all possible paths~\cite{ceu.sensys,esterel.primer}.
 
 In the following sections, we show the three basic differences from \CEU to 
 Esterel: deterministic execution for side-effect operations 
@@ -320,8 +322,10 @@ Esterel: deterministic execution for side-effect operations
 (Section~\ref{sec.ceu.abrt}), and stack-based execution for internal events 
 (Section~\ref{sec.ceu.ints}).
 %
-They are fundamental to enable advanced control mechanism in \CEU.
+They are fundamental to enable advanced control mechanism in \CEU to be 
+presented in Section~\ref{sec.adv}.
 
+\newpage %TTT
 \subsection{External reactions and determinism}
 \label{sec.ceu.det}
 
@@ -365,7 +369,7 @@ Section~\ref{sec.ceu.abrt}), and ensures a reproducible execution for
 shared-memory programs.
 %
 For software development, we believe that deterministic shared-memory 
-concurrency is beneficial, specially considering embedded systems which make 
+concurrency is beneficial, specially considering embedded systems, which make 
 extensive use of memory mapped ports for I/O.
 %For Esterel, however, is also used in hardware design~\cite{rp.twelve} where 
 %parallelism is inherent.
@@ -383,8 +387,8 @@ The code fragments of Figure~\ref{lst.abortion} show corner cases for thread
 abortion in Esterel and \CEU.
 %
 For instance, it is not clear in the leftmost example in Esterel if the call to 
-\code{f} should execute or not (after \code{A}), given that the body and 
-abortion events are the same.
+\code{f} should execute or not after \code{A}, given that the body and abortion 
+events are the same.
 %
 For this reason, Esterel provides \emph{weak} and \emph{strong} variations for 
 the \code{abort} statement.
@@ -393,13 +397,13 @@ the call does not execute.
 %
 In \CEU, given the deterministic scheduling rules, strong and weak abortions 
 can be chosen by reordering trails inside a \code{par/or}, e.g., in the example 
-in the middle, the second trail is strongly aborted and the call to \code{\_f} 
-never executes.
+in the middle, the second trail is strongly aborted by the first trail and the 
+call to \code{\_f} never executes.
 
 \CEU also supports \code{par/hor} compositions (standing for 
 \emph{hierarchical-or}) which schedules both sides before terminating.
-This way, in the rightmost example of Figure~\ref{lst.abortion}, both 
-\code{\_g} and \code{\_f} (in this order) will execute in reaction to \code{S}.
+Therefore, in the rightmost example of Figure~\ref{lst.abortion}, both 
+\code{\_g} and \code{\_f} (in this order) will execute in reaction to \code{A}.
 Hierarchical traversal is fundamental for dataflow programming, as we discuss 
 in Section~\ref{sec.adv.frp}.
 Note that in contrast with a \code{par/and}, a \code{par/hor} rejoins on the 
@@ -461,7 +465,8 @@ Figure~\ref{lst.prints} illustrates the use of internal signals (events) in
 Esterel and \CEU.
 %
 For the version in Esterel, given that there is no control dependency between 
-the calls to \code{printf}, they may execute in any order after \code{A}.
+the calls to \code{printf}, they may execute in any order after \code{A} and 
+\code{B}.
 %
 For the version in \CEU, the occurrence of \code{A} makes the program behave as 
 follows (with the stack in emphasis):
@@ -481,11 +486,11 @@ program also terminates;
 }
 
 \begin{figure}[!t]
-\begin{minipage}[t]{0.49\linewidth}
+\begin{minipage}[t]{0.43\linewidth}
 \begin{lstlisting}[mathescape=true]
 // ESTEREL
-input A;
-signal B;
+input A;    // external
+signal B;   // internal
 [[
     await A;
     emit B;
@@ -497,11 +502,11 @@ $\|$
 \end{lstlisting}
 \end{minipage}
 %
-\begin{minipage}[t]{0.50\linewidth}
-\begin{lstlisting}[numbers=left,xleftmargin=3em]
+\begin{minipage}[t]{0.56\linewidth}
+\begin{lstlisting}[numbers=left,xleftmargin=3.1em]
 // CEU
-input void A;
-event void b;
+input void A;  // external
+event void b;  // internal
 par/and do
     await A;
     emit b;
@@ -546,30 +551,30 @@ with
     _assert(v==2);  // after return
 end
 \end{lstlisting}
-\caption{ The subroutine \code{inc} is defined in a loop, in parallel with the 
-caller.
+\caption{ The subroutine \code{inc} is defined in a loop (lines 3-6), in 
+parallel with the caller (lines 8-i1).
 \label{lst.sub}
 }
 \end{figure}
-
-In contrast with $C$ functions, this form of subroutines can be combined with 
-the other primitives of \CEU, such as parallel compositions.
-Furthermore, it can \code{await}, keeping context information such as locals 
-and the program counter (like coroutines).
-In Section~\ref{sec.adv.excpt} we show how to implement exceptions on top of 
-it.
 
 On the one hand, this form of subroutines has a significant limitation that it 
 cannot express recursive calls: an \code{emit} to itself will always be 
 ignored, given that a running body cannot be awaiting itself.
 %
-On the other hand, this very same limitation bring some important safety 
+On the other hand, this very same limitation brings some important safety 
 properties to subroutines:
-they are guaranteed to react in bounded time;
-memory for locals is also bounded, not requiring runtime stacks.
+first, they are guaranteed to react in bounded time;
+second, memory for locals is also bounded, not requiring runtime stacks.
 %
 In Section~\ref{sec.adv.frp}, we take advantage of the lack of recursion to 
 properly describe mutual dependency among trails in parallel.
+
+In contrast with $C$ functions, this form of subroutines can use the other 
+primitives of \CEU, such as parallel compositions.
+Furthermore, it can \code{await}, keeping context information such as locals 
+and the program counter (like coroutines~\cite{lua.coroutines}).
+In Section~\ref{sec.adv.excpt} we show how to implement exceptions on top of 
+it.
 
 \begin{comment}
 \vspace{5pt}
@@ -592,7 +597,7 @@ external stimulus, reacting to it, and going back to awaiting) does not demand
 unrestricted subroutines.
 \end{comment}
 
-%\newpage
+\newpage %TTT
 \section{Advanced control mechanisms}
 \label{sec.adv}
 
@@ -614,8 +619,8 @@ internal events.
 %
 In the example of Figure~\ref{lst.excpt1}, an external entity periodically 
 writes to a file and notifies the program through the event \code{ENTRY} 
-carrying the number of available characters.
-The application reacts to every \code{ENTRY} in a loop (lines 8-13), invoking 
+carrying the number of available characters (defined in line 2).
+The application reacts to every \code{ENTRY} in a loop (lines 9-13), invoking 
 the \code{read} subroutine (line 11), and then using the filled buffer (line 
 12).
 %Note that the file operation \code{read} is defined as an internal event 
@@ -697,7 +702,7 @@ To handle read exceptions, we use an additional trail in
 Figure~\ref{lst.excpt3} that \emph{strongly} aborts the normal flow on 
 exceptions (line 3).
 For instance, if the application tries to read an entry and fails, it will 
-behave as follows (with the stack in emphasis):
+behave as follows:
 
 {\small
 \begin{enumerate}
@@ -715,9 +720,9 @@ program. \\
 \end{enumerate}
 }
 
-The exception handler (line 3 of Figure~\ref{lst.excpt3}) is placed in parallel 
-with the normal behavior (line 5), and can effectively abort its execution to 
-avoid the unsafe use of \code{buf} (line 12 of Figure~\ref{lst.excpt1}).
+The exception handler (line 3 of Figure~\ref{lst.excpt3}) can effectively abort 
+the stacked continuation (line 12 of Figure~\ref{lst.excpt1}), avoiding the 
+invalid access to \code{buf}.
 %
 %Note that the original sequential code (lines 8-13 of Figure~\ref{lst.excpt1}) 
 %did not have a single line modified.
@@ -776,6 +781,9 @@ higher level to developers.
 Reactive dataflow programming provides a declarative style to express 
 dependency relationships among data.
 %
+Figure~\ref{fig.glitch} shows the dependency graph for the reactive expression 
+\code{E~<~E+1}, which should always yield $true$.
+%
 \CEU can express data dependency relying on \code{par/hor} compositions and 
 internal events to address two common subtleties in this context: 
 \emph{glitches} and \emph{cyclic dependencies}~\cite{frp.survey}.
@@ -785,14 +793,11 @@ inconsistent order.
 It is usually avoided by traversing the graph in topological 
 order~\cite{frtime.embedding,frp.survey}.
 %
-Figure~\ref{fig.glitch} shows a graph for the expression \code{E~<~E+1}, which 
-should always yield $true$.
 In a glitch-free implementation, when \code{E} changes, \code{e1} should be 
-updated before \code{b} (because \code{b} also depends on \code{e1}) to avoid 
-yielding \code{false}.
+updated before \code{b} to avoid yielding \code{false} (because \code{b} also 
+depends on \code{e1}).
 %
-The code in the right of the graph implements this ``reactive expression'' in 
-\CEU.
+The code in the right of the graph implements it in \CEU.
 The first trail (lines 4-13) updates and signals \code{b} whenever either 
 \code{E} or \code{e1} changes.
 The second trail (lines 15-19) updates and signals \code{e1} whenever \code{E} 
@@ -814,14 +819,15 @@ lines 8 and 17):
       (The \code{par/hor} still hangs until the program blocks.)
 \item Line 18 resumes, loops, and awaits the next occurrence of \code{E}.
 \item Now that the program cannot advance, the \code{par/hor} rejoins and 
-        correctly emits \code{b=>1} (i.e. \code{v1=1 < v2=2}).
+        correctly emits \code{b=>1} (i.e., \code{v1=1 < v2=2}).
 \end{enumerate}
 }
 
 Note that the described behavior does not depend on the order the trails are 
 defined in the source code.
-The \code{par/hor} is fundamental to avoid the composition abortion, which 
-would result in missing the update to \code{e1} in line 10.
+The \code{par/hor} is fundamental to avoid the abortion of the composition 
+before both sides have the chance to awake, ensuring the update to \code{e1} in 
+line 10.
 
 \begin{figure}[t]
 \begin{minipage}[t]{0.34\linewidth}
@@ -868,6 +874,10 @@ end
 }
 \end{figure}
 
+Figure~\ref{lst.frp2} shows a mutual conversion for temperatures in Celsius and 
+Fahrenheit, so that whenever the value in one unit is set, the other is 
+automatically recalculated (a problem proposed in~\cite{frp.survey}).
+%
 Mutual dependency is another known issue in dataflow languages, usually 
 requiring the explicit placement of a specific delay operator to avoid runtime
 cycles~\cite{frtime.embedding,luagravity.sblp}.
@@ -878,30 +888,40 @@ internal dependency problem across two reactions to the environment.
 \CEU relies on the stack-based execution for internal events to avoid runtime 
 cycles.
 %
-As an example, the program in Figure~\ref{lst.frp2} applies the temperature 
-conversion formula between Celsius and Fahrenheit, so that whenever the value 
-in one unit is set, the other is automatically recalculated (a problem proposed 
-in~\cite{frp.survey}).
+The code in the right of the Figure~\ref{lst.frp2} implements the conversion 
+formula in \CEU.
 %
 \begin{figure}[t]
-%\rule{8.5cm}{0.37pt}
-\begin{lstlisting}[numbers=left,xleftmargin=2em]
+\begin{minipage}[t]{0.22\linewidth}
+\vspace{15pt}
+\hspace{0.0cm}
+\includegraphics[width=\textwidth]{c2f}
+\hspace{0.0cm}
+\end{minipage}
+%
+\begin{minipage}[t]{0.10\linewidth}
+\hspace{0.4cm}
+\end{minipage}
+\begin{minipage}[t]{0.67\linewidth}
+\begin{lstlisting}[numbers=left,xleftmargin=1em]
 event int tc, tf;
 par/or do
-    loop do                // 1st trail
+    loop do         // 1st trail
         var int v = await tc;
         emit tf => (9 * v / 5 + 32);
     end
 with
-    loop do                // 2nd trail
+    loop do         // 2nd trail
         var int v = await tf;
         emit tc => (5 * (v-32) / 9);
     end
 with
-    <...>                  // 3rd trail
+    <...>           // 3rd trail
     emit tc => 0;
 end
 \end{lstlisting}
+\end{minipage}
+%\rule{8.4cm}{0.37pt}
 \caption{ A dataflow program with mutual dependency.
 \label{lst.frp2}
 }
@@ -1059,9 +1079,9 @@ occurrences in programs.
 %In accordance with the zero-delay hypothesis of \CEU, $mem$ expressions are 
 %considered to be atomic and instantaneous
 %
-The special notation $nop$ is used to represent an innocuous $mem$ expression 
-(it can be though as a synonym for $mem(\epsilon)$, where $\epsilon$ is an 
-unused identifier).
+The special notation $nop$ is used to represent innocuous $mem$ expressions (it 
+can be thought as a synonym for $mem(\epsilon)$, where $\epsilon$ is an unused 
+identifier).
 %
 All other expressions map to their counterparts in the concrete language.
 
@@ -1094,7 +1114,7 @@ popped further).
 The event $\eta$ is used as a special marker to check for and resume pending 
 \emph{hor} expressions before terminating the reaction.
 
-We describe this relation with a set of \emph{small-step} structural semantics 
+We describe the relation with a set of \emph{small-step} structural semantics 
 rules, which are built in such a way that at most one transition is possible at 
 any time, resulting in deterministic reaction chains.
 %
@@ -1112,10 +1132,11 @@ the current one ($m<n$).
 %query that value.
 %
 An $emit$ transits to an $emitting$ holding the current stack level ($|S|$ 
-stands for the stack length), and pushing the referred event on the stack (in 
-rule \rr{emit}).
-With the new stack level $|S|+1$, the $emitting(|S|)$ itself cannot transit, as 
-rule \rr{emitting} expects its parameter to match the current stack level.
+stands for the stack size), and pushes the referred event on the stack (in rule 
+\rr{emit}).
+With the new stack level $|s:S|$ after an $emit$, the resulting $emitting(|S|)$ 
+cannot transit yet, as rule \rr{emitting} expects its parameter $|S|$ to match 
+the current stack level.
 This trick provides the desired stack-based semantics for internal events.
 
 Proceeding to compound expressions, the rules for conditionals and sequences 
@@ -1127,10 +1148,10 @@ Given that our semantics focuses on control, rules \rr{if-true} and
 The ``magical'' function $val$ receives the memory identifier and current 
 reaction sequence number, returning the current memory value.
 %
-Although the value is arbitrary, it is unique in a reaction chain, because a 
-given expression can execute only once within it (remember that $loops$ must 
-contain $awaits$ which, from rule \rr{await}, cannot awake in the same reaction 
-they are reached).
+Although the value is arbitrary, it is unique, because a given expression can 
+execute only once within a reaction (remember that $loops$ must contain 
+$awaits$ which, from rule \rr{await}, cannot awake in the same reaction they 
+are reached).
 %For all other rules, we omit these values (e.g., \rr{seq-nop}).
 
 The rules for loops are analogous to sequences, but use \code{`@'} as 
@@ -1141,14 +1162,17 @@ with itself (rule \rr{loop-expd}).
 Rules \rr{loop-adv} and \rr{loop-nop} are similar to rules \rr{seq-adv} and 
 \rr{seq-nop}, advancing the loop until they reach a $mem(id)$.
 However, what follows the loop is the loop itself (rule \rr{loop-nop}).
-Note that if we used \code{`;'} as a separator in loops, rules \rr{loop-brk} 
-and \rr{seq-brk} would conflict.
+%Note that if we used \code{`;'} as a separator in loops, rules \rr{loop-brk} 
+%and \rr{seq-brk} would conflict.
 %
 Rule \rr{loop-brk} escapes the enclosing loop, transforming everything into a 
 $nop$.
 
 The rules with the \rr{par} prefix are valid for all $and$/$or$/$hor$ 
 compositions (substituting the $par$ in the rules for each of them).
+%
+The difference between the three parallel compositions consists only in how to 
+deal with one of the sides terminating.
 %
 The rules \rr{par-adv1} and \rr{par-adv2} force the transitions on the left 
 branch $p$ to occur before transitions on the right branch $q$.
@@ -1248,13 +1272,13 @@ $awaiting$ and $emitting$ expressions.
     {\DS \LL S, (p~par~q) \RR \ST \LL S', (p~par~q') \RR }
     & \rr{(par-adv2)}      \\
 %%%
-& \LL S, (break~par~q) \RR \ST \LL S, (clear(q)~;~break) \RR
+& \LL S, (break~par~q) \RR \ST \LL S, break \RR
     & \rr{(par-brk1)}   \\
 %%%
 & \frac
     {\DS isBlocked(n,S,p) }
 %   -----------------------------------------------------------
-    {\DS \LL S, (p~par~break) \RR \ST \LL S, (clear(p)~;~break) \RR }
+    {\DS \LL S, (p~par~break) \RR \ST \LL S, break \RR }
     & \rr{(par-brk2)}   \\
 %\end{eqnarray*}
 %}
@@ -1269,25 +1293,25 @@ $awaiting$ and $emitting$ expressions.
 & \LL S, (p~and~mem(id)) \RR \ST \LL S, p \RR
     & \rr{(and-nop2)}   \\
 %%%
-& \LL S, (mem(id)~or~q) \RR \ST \LL S, clear(q) \RR
+& \LL S, (mem(id)~or~q) \RR \ST \LL S, nop \RR
     & \rr{(or-nop1)}   \\
 %%%
 & \frac
     {\DS isBlocked(n,S,p) }
 %   -----------------------------------------------------------
-    {\DS \LL S, (p~or~mem(id)) \RR \ST \LL S, clear(p) \RR }
+    {\DS \LL S, (p~or~mem(id)) \RR \ST \LL S, nop \RR }
     & \rr{(or-nop2)}   \\
 %%%
 & \frac
-    {\DS q \neq (a~hor~b) \1\vee\1 (a \neq nop \1\wedge\1 b \neq nop) }
+    {\DS q \neq (a~hor~b) \1\vee\1 (a \neq mem(v) \1\wedge\1 b \neq mem(v)) }
 %   -----------------------------------------------------------
-    {\DS \LL [\eta], (nop~hor~q) \RR \ST \LL [\eta], nop \RR }
+    {\DS \LL [\eta], (mem(v)~hor~q) \RR \ST \LL [\eta], nop \RR }
     & \rr{(hor-nop1)}   \\
 %%%
 & \frac
-    {\DS p \neq (a~hor~b) \1\vee\1 (a \neq nop \1\wedge\1 b \neq nop) }
+    {\DS p \neq (a~hor~b) \1\vee\1 (a \neq mem(v) \1\wedge\1 b \neq mem(v)) }
 %   -----------------------------------------------------------
-    {\DS \LL [\eta], (p~hor~nop) \RR \ST \LL [\eta], nop \RR }
+    {\DS \LL [\eta], (p~hor~mem(v)) \RR \ST \LL [\eta], mem(v) \RR }
     & \rr{(hor-nop2)}
 %
 \end{eqnarray*}
@@ -1325,11 +1349,8 @@ The recursive predicate $isBlocked$.
 The rules \rr{par-brk1} and \rr{par-brk2} deal with a $break$ in each of the 
 parallel sides.
 A $break$ terminates the whole composition to escape the innermost loop 
-(\emph{aborting} the other side).
+(\emph{strongly aborting} the other side).
 
-The difference betwen the three parallel compositions consists in how to deal 
-with one of the sides terminating with a $nop$.
-%
 For an $and$ composition, if one of the sides terminates, the composition is 
 simply substituted by the other side, as both sides are required to terminate 
 (rules \rr{and-nop1} and \rr{and-nop2}).
@@ -1339,8 +1360,8 @@ immediatelly terminate the composition (rules \rr{or-nop1} and \rr{or-nop2}).
 %Note that rule \rr{xor-nop1} strongly aborts trail $q$ as soon as $p$ reaches 
 %a $nop$
 %
-However, for a parallel $hor$ it is not enough that one of the sides reaches a 
-$nop$, as the other should still be allowed to react.
+However, for a parallel $hor$ it is not enough that one of the sides 
+terminates, as the other should still be allowed to react.
 The rules \rr{hor-nop1} and \rr{hor-nop2} ensure, first, that a composition 
 rejoins only after no transitions are possible in either sides, and second, 
 that rejoins happen from inside out, i.e., that nested compositions rejoin 
@@ -1356,7 +1377,7 @@ parallel trails.
 If all trails hangs only in $awaiting$ expressions, it means that the program 
 cannot advance in the current reaction chain.
 %
-However, $emitting$ expressions should resume in the ongoing reaction, when 
+However, $emitting$ expressions should resume in the ongoing reaction, once 
 their lower stack indexes are restored (see rule \rr{emit}).
 %
 Therefore, we define another relation to pop the stack if the program becomes 
@@ -1378,11 +1399,7 @@ $$
 %
 To describe a \emph{reaction chain} in \CEU, i.e., how a program behaves in 
 reaction to a single external event, we use the reflexive transitive closure of 
-this relation:
-%
-$$
-    \LL S,p \RR \xRightarrow[~~n~~]{*} \LL S',p' \RR
-$$
+this relation.
 %
 Finally, to describe the complete execution of a program, we need multiple 
 ``invocations'' of reaction chains, incrementing the sequence number:
@@ -1399,9 +1416,9 @@ Finally, to describe the complete execution of a program, we need multiple
 & ...
 \end{align*}
 %
-Each invocation starts with an external event at the top of the stack and 
-finishes with a modified program and an empty stack.
-After each invocation, the sequence number is incremented.
+%Each invocation starts with an external event at the top of the stack and 
+%finishes with a modified program and an empty stack.
+%After each invocation, the sequence number is incremented.
 
 %\newpage
 \section{Related work}
@@ -1413,33 +1430,33 @@ low-level event-driven systems~\cite{wsn.protothreads,wsn.sol,wsn.osm}.
 %,wsn.tinythreads}.
 %
 Some offer predictable and lightweight
-multi-threading~\cite{wsn.protothreads} with shared-memory concurrency, but 
+multi-threading with shared-memory concurrency~\cite{wsn.protothreads}, but 
 lack thread composition and abortion (as described in 
 Section~\ref{sec.ceu.abrt}).
 They also do not provide first-class events or a powerful broadcast mechanism, 
 limiting their control mechanisms.
 %
 OSM~\cite{wsn.osm} provides parallel state machines with a formal and mature 
-synchronous model, with (equivalent) support to thread composition and 
-abortion.
+synchronous model that supports thread composition and abortion.
 However, although machines can share memory, the execution order for operations 
 among them is non-deterministic.
 Also, describing sequential code across reactions is not straightforward with 
 state machines~\cite{wsn.osm} (in comparison to \CEU's \code{await} statement).
 %
-Another Esterel-based language for constrained systems~\cite{wsn.sol} made 
-similar design decisions to ours, handling a single external event at a time, 
-and relying on a deterministic scheduler for safe memory sharing.
+%Another Esterel-based language for constrained systems~\cite{wsn.sol} made 
+%similar design decisions to ours, handling a single external event at a time, 
+%and relying on a deterministic scheduler for safe memory sharing.
 
 \emph{Functional Reactive Programming (FRP)} adapts modern functional languages 
 to the reactive dataflow style~\cite{frp.principles}.
 In particular, Flask~\cite{wsn.flask} shows that dataflow languages can also 
 target constrained systems.
 %
-\CEU borrows some ideas from an FRP implementation \cite{frtime.embedding}, 
-such as a push-driven evaluation and glitch prevention.
-However, dataflow in \CEU is less abstract in comparison to FRP, and limited to 
-static relationships only.
+%\CEU borrows some ideas from an FRP implementation \cite{frtime.embedding}, 
+%such as a push-driven evaluation and glitch prevention.
+%However
+Dataflow in \CEU is limited to static relationships only, and less abstract in 
+comparison to FRP.
 
 \begin{comment}
 SHIM is an asynchronous language that enforces synchronous communications among 
@@ -1474,8 +1491,7 @@ embedded systems, while also embracing practical aspects, such as
 shared-memory concurrency, and advanced control-flow mechanisms.
 %
 \CEU introduces a stack-based execution policy for internal events, expanding 
-its expressiveness, such as for describing exceptions and dataflow programming 
-without dedicated primitives.
+its expressiveness, such as for describing exceptions and dataflow programming.
 %
 As far as we know, \CEU is the first language to reconcile the control and 
 dataflow reactive styles.
